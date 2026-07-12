@@ -64,6 +64,7 @@ fn main() -> Result<(), windows::core::Error> {
             println!("/balanced  - Set Balanced mode");
             println!("/turbo     - Set Turbo mode");
             println!("/silent    - Set Silent mode");
+            println!("/help      - List available commands that you can use");
             return Ok(());
         },
         None => {
