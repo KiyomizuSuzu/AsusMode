@@ -9,9 +9,9 @@ use windows::{
     },
 };
 //DATA
-const IOC: u32 = 0x0022240C; // I/O Control
-const DEVS: u32 = 0x53564544; // Device Set
-const MOD: u32 = 0x00120075; // Mode
+const INPUT_OUTPUT_CONTROL: u32 = 0x0022240C;
+const DEVICE_SET: u32 = 0x53564544;
+const MODE: u32 = 0x00120075;
 //EXECUTION
 fn convert(text: &str) -> Vec<u16> {
     text.encode_utf16().chain([0]).collect()
@@ -38,7 +38,7 @@ fn call(acpi: HANDLE, id: u32, data: &[u8]) -> Result<[u8;16], Box<dyn std::erro
     let mut bytes_returned = 0;
     unsafe {
         DeviceIoControl(acpi,
-                        IOC,
+                        INPUT_OUTPUT_CONTROL,
                         Some(inbuf.as_ptr() as *const c_void),
                         inbuf.len() as u32,
                         Some(response.as_mut_ptr() as *mut c_void),
@@ -78,9 +78,9 @@ fn main() -> Result<(), windows::core::Error> {
     };
     let open = access()?;
     let mut args = [0;8];
-    args[..4].copy_from_slice(&MOD.to_le_bytes());
+    args[..4].copy_from_slice(&MODE.to_le_bytes());
     args[4..].copy_from_slice(&(mode as u32).to_le_bytes());
-    match call(open, DEVS, &args) {
+    match call(open, DEVICE_SET, &args) {
         Ok(result) => {
             let success = i32::from_le_bytes(result[..4].try_into().unwrap()) == 1;
             if success {
