@@ -4,6 +4,8 @@
 # AsusMode
 これは、Rust で作られた ASUS ノートパソコンの電源/パフォーマンスモードを切り替えるためのコマンドラインインターフェースです。
 
+`\\.\ATKACPI` デバイスを公開する、ATK ACPI 互換ドライバーが実行されている必要があります(サービス名: ATKWMIACPIIO)。通常、Asus System Control Interface v3 パッケージに同梱されています。
+
 ### コマンド
 ```powershell
 AsusMode /balanced  # バランスモードに設定
@@ -41,6 +43,8 @@ AGPL-3.0に従う以上、対象コードは同じライセンスのまま維持
 
 # AsusMode
 This is a command-line interface for switching power/performance modes on ASUS laptops, made in Rust.
+
+Requires a running ATK ACPI-compatible driver exposing the `\\.\ATKACPI` device (service name ATKWMIACPIIO), usually bundled with Asus System Control Interface v3 package.
 
 ### Commands
 ```powershell
