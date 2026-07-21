@@ -1,15 +1,24 @@
 // MAIN RUNTIME
 use std::{
-    env, 
-    ffi::c_void
+    env,
+    error::Error as StdError,
+    ffi::c_void,
+    os::windows::io::{
+        FromRawHandle, 
+        OwnedHandle, 
+        AsRawHandle
+    }
 };
 use windows::{
-    core::PCWSTR,
-    Win32::{
-        Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE},
-        Storage::FileSystem::{CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
-        System::IO::DeviceIoControl,
+    core::{
+        PCWSTR, 
+        Error as WinError
     },
+    Win32::{
+        Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE},
+        Storage::FileSystem::{CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
+        System::IO::DeviceIoControl
+    }
 };
 //DATA
 const INPUT_OUTPUT_CONTROL: u32 = 0x0022240C;
@@ -19,20 +28,21 @@ const MODE: u32 = 0x00120075;
 fn convert(text: &str) -> Vec<u16> {
     text.encode_utf16().chain([0]).collect()
 }
-fn access() -> Result<HANDLE, windows::core::Error> {
+fn access() -> Result<OwnedHandle, WinError> {
     unsafe {
-        CreateFileW(
+        let handle = CreateFileW(
             PCWSTR(convert(r"\\.\ATKACPI").as_ptr()),
             (GENERIC_READ | GENERIC_WRITE).0,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             None,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL,
-            None,
-        )
+            None
+        )?;
+        Ok(OwnedHandle::from_raw_handle(handle.0 as _))
     }
 }
-fn call(acpi: HANDLE, id: u32, data: &[u8]) -> Result<[u8;16], Box<dyn std::error::Error>> {
+fn call(acpi: &OwnedHandle, id: u32, data: &[u8]) -> Result<[u8;16], Box<dyn StdError>> {
     let mut inbuf = Vec::with_capacity(8 + data.len());
     inbuf.extend(id.to_le_bytes());
     inbuf.extend((data.len() as u32).to_le_bytes());
@@ -40,14 +50,14 @@ fn call(acpi: HANDLE, id: u32, data: &[u8]) -> Result<[u8;16], Box<dyn std::erro
     let mut response = [0;16];
     let mut bytes_returned = 0;
     unsafe {
-        DeviceIoControl(acpi,
+        DeviceIoControl(HANDLE(acpi.as_raw_handle() as _),
                         INPUT_OUTPUT_CONTROL,
                         Some(inbuf.as_ptr() as *const c_void),
                         inbuf.len() as u32,
                         Some(response.as_mut_ptr() as *mut c_void),
                         16,
                         Some(&mut bytes_returned),
-                        None,
+                        None
                     )?;
     }
     if bytes_returned < 4 {
@@ -57,7 +67,7 @@ fn call(acpi: HANDLE, id: u32, data: &[u8]) -> Result<[u8;16], Box<dyn std::erro
         Ok(response)
     }
 }
-fn main() -> Result<(), windows::core::Error> {
+fn main() -> Result<(), Box<dyn StdError>> {
     let (mode, name) = match env::args().nth(1).as_deref() {
         Some("/balanced") => (0, "Balanced"),
         Some("/turbo") => (1, "Turbo"),
@@ -77,28 +87,25 @@ fn main() -> Result<(), windows::core::Error> {
         _ => {
             println!("Unknown command. Check your spelling or type /help for correction.");
             return Ok(());
-        },
+        }
     };
     let open = access()?;
     let mut args = [0;8];
     args[..4].copy_from_slice(&MODE.to_le_bytes());
     args[4..].copy_from_slice(&(mode as u32).to_le_bytes());
-    match call(open, DEVICE_SET, &args) {
+    match call(&open, DEVICE_SET, &args) {
         Ok(result) => {
             let success = i32::from_le_bytes(result[..4].try_into().unwrap()) == 1;
             if success {
-                println!("Successfully set {name} mode\nAPPROVED");
+                println!("Successfully set {name} mode");
             }
             else {
-                eprintln!("Failed to set {name} mode\nREJECTED");
+                eprintln!("Failed to set {name} mode");
             }
         }
         Err(message) => {
             eprintln!("DeviceIoControl FAILURE: {message}");
         }
-    }
-    unsafe {
-        CloseHandle(open)?;
     }
     Ok(())
 }
